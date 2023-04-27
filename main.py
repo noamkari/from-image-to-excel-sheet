@@ -50,8 +50,15 @@ def text_extraction(img, mode):
     # set the path to the tesseract executable
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-    # convert the image to binary
-    img = convert_to_binary(img)
+    # # convert the image to binary
+    # img = convert_to_binary(img)
+
+    # resize the image
+    img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+
+    # apply erosion
+    kernel = np.ones((1, 1), np.uint8)
+    img = cv2.erode(img, kernel, iterations=1)
 
     data = None
 
@@ -69,7 +76,7 @@ def text_extraction(img, mode):
     return data
 
 
-def insert_to_excel(data, out_path):
+def insert_to_excel(data, out_path, num_row):
     """
     insert the output to Excel file
     :param data:list of string containing the data, each string is a cell
@@ -87,7 +94,7 @@ def insert_to_excel(data, out_path):
     for cell in data:
         worksheet.write(row, col, cell)
         row += 1
-        if row == 20:
+        if row == num_row:
             row = 0
             col += 1
 
@@ -111,23 +118,22 @@ def sort_contours(cnts, method="left-to-right"):
 
     # construct the list of bounding boxes and sort them from top to
     # bottom
-    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
-                                        key=lambda b: b[1][i],
-                                        reverse=reverse))
+    bounding_boxes = [cv2.boundingRect(c) for c in cnts]
+    (cnts, bounding_boxes) = zip(*sorted(zip(cnts, bounding_boxes),
+                                         key=lambda b: b[1][i],
+                                         reverse=reverse))
 
     # return the list of sorted contours and bounding boxes
-    return (cnts, boundingBoxes)
+    return (cnts, bounding_boxes)
 
 
 # Functon for extracting the box
 def detect_grid(img_bin, is_handwritten=False):
     """
-    extract the boxes from the image
-    :param is_handwritten:
-    :param img_for_box_extraction_path:
-    :param cropped_dir_path:
-    :return:
+    detect the grid in the image
+    :param img_bin: np array in shape of (n, m, 1)
+    :param is_handwritten: bool, True if the image is handwritten
+    :return: image with the grid
     """
 
     # A kernel of (3 X 3) ones.
@@ -142,7 +148,7 @@ def detect_grid(img_bin, is_handwritten=False):
     img_bin = 255 - img_bin  # Invert the image
 
     # Defining a kernel length
-    kernel_length = np.array(img_bin).shape[1] // 40
+    kernel_length = np.array(img_bin).shape[1] // 20
 
     # A vertical kernel of (1 X kernel_length)
     vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,
@@ -174,22 +180,13 @@ def detect_grid(img_bin, is_handwritten=False):
 
     return img_final_bin
 
-
-def extract_number_of_row_and_col(bin_img):
-    """
-    extract the number of rows and columns from the image
-    :param bin_img: np array of the image (n, m , 1)
-    :return: number of rows and columns
-    """
-
-
 def find_cell(cropped_dir_path, img_grid, img):
     # Find contours for image, which will detect all the boxes
     contours, hierarchy = cv2.findContours(
-        img_grid, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        img_grid, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
     # Sort all the contours by top to bottom.
-    (contours, boundingBoxes) = sort_contours(contours, method="top-to-bottom")
+    (contours, boundingBoxes) = sort_contours(contours, method="right-to-left")
 
     idx = 0
     cells = []
@@ -217,8 +214,8 @@ def find_cell(cropped_dir_path, img_grid, img):
 
 
 if __name__ == '__main__':
-    path = "test_image/img3.jpeg"
-    is_handwritten = False
+    path = "test_image/img5.jpeg"
+    is_handwritten = True
 
     helper.delete_dir_content("images/")
     helper.delete_dir_content("cells/")
@@ -234,10 +231,12 @@ if __name__ == '__main__':
     img_grid = detect_grid(img_bin, is_handwritten=is_handwritten)
     cv2.imwrite("Images/img_grid.jpg", img_grid)
 
+    # extract the grid from the image
     r = np.logical_not(img_bin).astype(np.uint8) * 255 - img_grid
     # invert r
     r = 255 - r
 
+    # for debugging
     cv2.imwrite("Images/img_minus_grid.jpg", r)
 
     # find the contours
