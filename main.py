@@ -76,10 +76,11 @@ def text_extraction(img, mode):
     return data
 
 
-def insert_to_excel(data, out_path, num_row):
+def insert_to_excel(data, num_row,  out_path):
     """
     insert the output to Excel file
     :param data:list of string containing the data, each string is a cell
+    :param num_row: number of rows in the Excel file
     :param out_path: path to the output file
     :return: None
     """
@@ -180,7 +181,8 @@ def detect_grid(img_bin, is_handwritten=False):
 
     return img_final_bin
 
-def find_cell(cropped_dir_path, img_grid, img):
+
+def find_cell_and_extarct_data(cropped_dir_path, img_grid, img):
     # Find contours for image, which will detect all the boxes
     contours, hierarchy = cv2.findContours(
         img_grid, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -198,10 +200,11 @@ def find_cell(cropped_dir_path, img_grid, img):
         # and proportion is between 0.5 and 2
         if 2 > (w // h) > 0.5 and w > 10 and h > 10:
             idx += 1
-            new_img = img[y:y + h, x:x + w]
-            cells.append(new_img)
-            data = text_extraction(new_img, "single_word")
-            cv2.imwrite(f"{cropped_dir_path}{idx}_{data}.png", new_img)
+            crop_img = img[y:y + h, x:x + w]
+
+            data = text_extraction(crop_img, "single_word")
+            cells.append(data)
+            cv2.imwrite(f"{cropped_dir_path}{idx}_{data}.png", crop_img)
 
     # For Debugging
     # Enable this line to see all contours.
@@ -211,6 +214,8 @@ def find_cell(cropped_dir_path, img_grid, img):
         cv2.imwrite(f"Images/contour{i}.jpg", tmp)
 
     cv2.imwrite("img_contour.jpg", img)
+
+    return cells
 
 
 if __name__ == '__main__':
@@ -239,5 +244,8 @@ if __name__ == '__main__':
     # for debugging
     cv2.imwrite("Images/img_minus_grid.jpg", r)
 
-    # find the contours
-    find_cell("cells/", img_grid, r)
+    # find the cells and extract the data
+    cells = find_cell_and_extarct_data("cells/", img_grid, r)
+
+    # write the data to excel
+    insert_to_excel(data=cells, num_row=10, out_path=f"{path}.xlsx")
